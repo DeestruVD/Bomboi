@@ -21,7 +21,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr" className="scroll-smooth">
-      <body>{children}</body>
+      <body>
+        {/* Sans JavaScript, rien ne déclencherait les révélations et le contenu
+            resterait invisible. On neutralise l'état masqué dans ce cas. */}
+        <noscript>
+          <style>{`.reveal-root [data-reveal],.reveal-root [data-reveal-glow]{opacity:1;transform:none;filter:none}`}</style>
+        </noscript>
+        {children}
+      </body>
     </html>
   )
 }
