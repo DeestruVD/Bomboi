@@ -16,28 +16,29 @@
 
 @layer components {
   /* Slider range custom */
-  .range-oak {
+  .range-brand {
     -webkit-appearance: none;
     appearance: none;
     height: 4px;
-    background: rgba(196, 147, 90, 0.2);
+    background: rgba(236, 88, 2, 0.2);
     border-radius: 2px;
     outline: none;
     cursor: pointer;
   }
-  .range-oak::-webkit-slider-thumb {
+
+  .range-brand::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: #c4935a;
+    background: #ec5802;
     cursor: pointer;
   }
-  .range-oak::-moz-range-thumb {
+  .range-brand::-moz-range-thumb {
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: #c4935a;
+    background: #ec5802;
     cursor: pointer;
     border: none;
   }
@@ -59,16 +60,102 @@
   .gallery-img-5 { background: linear-gradient(135deg, #2E2A24, #5C3D1E); }
   .gallery-img-6 { background: linear-gradient(135deg, #4A3520, #A87A45); }
 
+  /* ---------------------------------------------------------------------
+     Révélations au défilement.
+
+     Courbe, durée et cascade reprises de la direction validée en maquette ;
+     sens d'arrivée variés (latéral, zoom) inspirés du site de référence.
+     Le rang dans la cascade est porté par --i, posé par revealed().
+     --------------------------------------------------------------------- */
+  /* Une entrée latérale déporte l'élément hors de sa section avant de le
+     ramener. Sans borne, la page devient plus large que l'écran et se laisse
+     tirer sur le côté tant que l'animation n'a pas eu lieu — surtout sur
+     mobile, où les blocs occupent toute la largeur.
+     `clip` plutôt que `hidden` : `hidden` ferait aussi de l'axe vertical un
+     conteneur de défilement. La déclaration `hidden` qui précède sert de repli
+     pour Safari antérieur à 16. */
+  .reveal-root {
+    overflow-x: hidden;
+    overflow-x: clip;
+  }
+
+  /* Les propriétés sont listées une à une plutôt qu'en raccourci : certains
+     éléments révélés portent aussi un `transition-colors` de Tailwind pour
+     leur survol, que le raccourci écraserait. Les couleurs gardent donc leur
+     propre durée, sans hériter du retard de la cascade. */
+  .reveal-root [data-reveal] {
+    opacity: 0;
+    transition-property: opacity, transform, filter, background-color, color, border-color;
+    transition-duration: 0.9s, 0.9s, 0.9s, 0.3s, 0.3s, 0.3s;
+    transition-timing-function:
+      cubic-bezier(0.16, 1, 0.3, 1), cubic-bezier(0.16, 1, 0.3, 1),
+      cubic-bezier(0.16, 1, 0.3, 1), ease, ease, ease;
+    transition-delay:
+      calc(var(--i, 0) * 115ms), calc(var(--i, 0) * 115ms),
+      calc(var(--i, 0) * 115ms), 0s, 0s, 0s;
+    will-change: opacity, transform, filter;
+  }
+
+  .reveal-root [data-reveal='up']    { transform: translateY(38px) scale(0.94); filter: blur(6px); }
+  .reveal-root [data-reveal='left']  { transform: translateX(-52px);            filter: blur(6px); }
+  .reveal-root [data-reveal='right'] { transform: translateX(52px);             filter: blur(6px); }
+  .reveal-root [data-reveal='zoom']  { transform: scale(0.9);                   filter: blur(6px); }
+
+  .reveal-root.is-revealed [data-reveal] {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  /* Les fonds atmosphériques dérivent plus lentement que le texte : c'est ce
+     décalage qui donne la profondeur. */
+  .reveal-root [data-reveal-glow] {
+    opacity: 0;
+    transform: translateY(-24px) scale(1.15);
+    transition:
+      opacity 1.1s ease-out,
+      transform 1.5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .reveal-root.is-revealed [data-reveal-glow] {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Un visiteur qui a activé « réduire les animations » (migraines, troubles
+     vestibulaires) voit la page apparaître d'un coup. */
+  @media (prefers-reduced-motion: reduce) {
+    .reveal-root [data-reveal],
+    .reveal-root.is-revealed [data-reveal],
+    .reveal-root [data-reveal-glow],
+    .reveal-root.is-revealed [data-reveal-glow] {
+      opacity: 1;
+      transform: none;
+      filter: none;
+      transition: none;
+    }
+  }
+
+  /* Rail du carrousel : on masque la barre de défilement, la navigation se
+     fait aux flèches, aux puces ou au glissement. Le défilement lui-même
+     reste natif — donc tactile, trackpad et clavier fonctionnent d'office. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Hero grid pattern */
   .hero-pattern {
     background-image:
       repeating-linear-gradient(
         0deg, transparent, transparent 60px,
-        rgba(196,147,90,0.04) 60px, rgba(196,147,90,0.04) 61px
+        rgba(236,88,2,0.04) 60px, rgba(236,88,2,0.04) 61px
       ),
       repeating-linear-gradient(
         90deg, transparent, transparent 60px,
-        rgba(196,147,90,0.04) 60px, rgba(196,147,90,0.04) 61px
+        rgba(236,88,2,0.04) 60px, rgba(236,88,2,0.04) 61px
       );
   }
 }
