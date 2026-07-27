@@ -6,18 +6,35 @@ import Configurator from '@/components/Configurator'
 import Process from '@/components/Process'
 import Contact from '@/components/Contact'
 import Footer from '@/components/Footer'
+import Reveal from '@/components/Reveal'
 
 export default function Home() {
   return (
     <main>
+      {/* La barre de navigation reste fixe et immobile : c'est du mobilier, pas
+          du contenu à révéler. Le configurateur non plus ne s'anime pas —
+          quand on tire un curseur pour voir un prix, une animation qui se
+          déclenche gêne au lieu de plaire. */}
       <Nav />
-      <Hero />
-      <Expertise />
-      <Gallery />
-      <Configurator />
-      <Process />
-      <Contact />
-      <Footer />
+      <Reveal immediate>
+        <Hero />
+      </Reveal>
+      <Reveal>
+        <Expertise />
+      </Reveal>
+      <Reveal>
+        <Gallery />
+      </Reveal>
+        <Configurator />
+      <Reveal>
+        <Process />
+      </Reveal>
+      <Reveal>
+        <Contact />
+      </Reveal>
+      <Reveal>
+        <Footer />
+      </Reveal>
     </main>
   )
 }
