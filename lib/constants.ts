@@ -51,8 +51,8 @@ export const PROCESS_STEPS = [
 ]
 
 export const CONTACT_DETAILS = [
-  { icon: '📍', label: 'Atelier',   value: 'Rue Paul Pastur 220, 6042 Charleroi' },
+  { icon: '📍', label: 'Atelier',   value: 'Zoning industriel, Jumet 6040' },
   { icon: '📞', label: 'Téléphone', value: '+32 496 98 93 60' },
   { icon: '✉',  label: 'Email',     value: 'marcobomboi05@gmail.com' },
-  { icon: '🕐', label: 'Horaires',  value: 'Lun–Ven 8h–18h · Sam 9h–13h' },
+  { icon: '🕐', label: 'Horaires',  value: 'Lun–Sam 7h–17h' },
 ]
