@@ -1,23 +1,22 @@
-import type { MaterialInfo, GalleryItem, DressingConfig } from '@/types'
+import type { MaterialInfo, GalleryItem, MaterialKey, OptionKey } from '@/types'
 
-export const MATERIALS: Record<string, MaterialInfo> = {
+export const MATERIALS: Record<MaterialKey, MaterialInfo> = {
   chene:      { color: 0xC4935A, hex: '#C4935A', name: 'Chêne naturel',  mult: 1.0 },
   noyer:      { color: 0x5C3D1E, hex: '#5C3D1E', name: 'Noyer massif',   mult: 1.4 },
   blanc:      { color: 0xF0EDE8, hex: '#F0EDE8', name: 'Blanc mat',      mult: 0.85 },
   anthracite: { color: 0x3A3835, hex: '#3A3835', name: 'Anthracite',     mult: 0.9 },
 }
 
-export const DEFAULT_CONFIG: DressingConfig = {
-  largeur: 200,
-  hauteur: 220,
-  profondeur: 60,
-  colonnes: 3,
-  materiau: 'chene',
-  optPortes: false,
-  optMiroir: false,
-  optLumiere: false,
-  optTiroirs: false,
-}
+/**
+ * Options transverses. Chaque type de meuble déclare celles qui le concernent
+ * (voir lib/furniture) : un escalier ne se ferme pas par des portes coulissantes.
+ */
+export const OPTIONS: { key: OptionKey; label: string; price: number }[] = [
+  { key: 'optPortes',  label: 'Portes coulissantes', price: 380 },
+  { key: 'optMiroir',  label: 'Miroir intégré',      price: 220 },
+  { key: 'optLumiere', label: 'Éclairage LED',       price: 150 },
+  { key: 'optTiroirs', label: 'Tiroirs intérieurs',  price: 280 },
+]
 
 export const GALLERY_ITEMS: GalleryItem[] = [
   { id: 1, title: 'Dressing panoramique', subtitle: 'Noyer massif',   desc: 'Noyer massif, finition huile naturelle',         gradientClass: 'gallery-img-1' },
@@ -52,8 +51,8 @@ export const PROCESS_STEPS = [
 ]
 
 export const CONTACT_DETAILS = [
-  { icon: '📍', label: 'Atelier',   value: 'Rue du test, 6000 Charleroi' },
-  { icon: '📞', label: 'Téléphone', value: '+32 (0)12 34 56 78' },
-  { icon: '✉',  label: 'Email',     value: 'contact@test.be' },
+  { icon: '📍', label: 'Atelier',   value: 'Rue Paul Pastur 220, 6042 Charleroi' },
+  { icon: '📞', label: 'Téléphone', value: '+32 496 98 93 60' },
+  { icon: '✉',  label: 'Email',     value: 'marcobomboi05@gmail.com' },
   { icon: '🕐', label: 'Horaires',  value: 'Lun–Ven 8h–18h · Sam 9h–13h' },
 ]

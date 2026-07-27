@@ -1,20 +1,26 @@
-import type { DressingConfig, PriceBreakdown } from '@/types'
-import { MATERIALS } from './constants'
+import type { FurnitureConfig, FurnitureKey, MaterialKey, PriceBreakdown } from '@/types'
+import { MATERIALS, OPTIONS } from './constants'
+import { FURNITURE } from './furniture'
 
-export function calcPrix(config: DressingConfig): PriceBreakdown {
-  const surface = (config.largeur * config.hauteur) / 10000
-  const vol = surface * (config.profondeur / 100)
-  const base = surface * 180 + vol * 120 + config.colonnes * 45
+/**
+ * La ventilation affichée est la même pour les neuf meubles — structure,
+ * matériau, options. Seule la base est propre au type et vient de son module.
+ */
+export function calcPrix(
+  type: FurnitureKey,
+  config: FurnitureConfig,
+  materiau: MaterialKey,
+): PriceBreakdown {
+  const base = FURNITURE[type].price(config)
 
-  const matMult = MATERIALS[config.materiau].mult
   const pStructure = Math.round(base * 0.6)
-  const pMateriau = Math.round(base * 0.4 * matMult)
+  const pMateriau = Math.round(base * 0.4 * MATERIALS[materiau].mult)
 
-  let pOptions = 0
-  if (config.optPortes)  pOptions += 380
-  if (config.optMiroir)  pOptions += 220
-  if (config.optLumiere) pOptions += 150
-  if (config.optTiroirs) pOptions += 280
+  const applicables = FURNITURE[type].options
+  const pOptions = OPTIONS.filter((o) => applicables.includes(o.key) && config[o.key]).reduce(
+    (sum, o) => sum + o.price,
+    0,
+  )
 
   return { pStructure, pMateriau, pOptions, total: pStructure + pMateriau + pOptions }
 }
