@@ -2,103 +2,60 @@
 
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
-import type { DressingConfig, MaterialKey } from '@/types'
-import { DEFAULT_CONFIG, MATERIALS } from '@/lib/constants'
+import type {
+  ChoiceParam,
+  FurnitureConfig,
+  FurnitureKey,
+  MaterialKey,
+  NumberParam,
+  ParamDef,
+  ParamValue,
+  ToggleParam,
+} from '@/types'
+import { MATERIALS, OPTIONS } from '@/lib/constants'
+import { FURNITURE, FURNITURE_KEYS, initialConfigs } from '@/lib/furniture'
 import { calcPrix, formatPrice } from '@/lib/pricing'
+import { SCHEMATICS } from './Schematics'
 
 const MATERIAL_KEYS = Object.keys(MATERIALS) as MaterialKey[]
 
-const OPTIONS: { key: keyof DressingConfig; label: string; price: number }[] = [
-  { key: 'optPortes', label: 'Portes coulissantes', price: 380 },
-  { key: 'optMiroir', label: 'Miroir intégré', price: 220 },
-  { key: 'optLumiere', label: 'Éclairage LED', price: 150 },
-  { key: 'optTiroirs', label: 'Tiroirs intérieurs', price: 280 },
-]
-
-/** Construit un meuble paramétrique en fonction de la config. */
-function buildDressing(config: DressingConfig): THREE.Group {
-  const group = new THREE.Group()
-
-  const w = config.largeur / 100
-  const h = config.hauteur / 100
-  const d = config.profondeur / 100
-  const t = 0.02 // épaisseur des panneaux (m)
-
-  const mat = new THREE.MeshStandardMaterial({
-    color: MATERIALS[config.materiau].color,
-    roughness: 0.6,
-    metalness: 0.05,
-  })
-
-  const addPanel = (
-    sx: number,
-    sy: number,
-    sz: number,
-    px: number,
-    py: number,
-    pz: number,
-  ) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), mat)
-    mesh.position.set(px, py, pz)
-    group.add(mesh)
-  }
-
-  // Côtés
-  addPanel(t, h, d, -w / 2 + t / 2, 0, 0)
-  addPanel(t, h, d, w / 2 - t / 2, 0, 0)
-  // Haut & bas
-  addPanel(w, t, d, 0, h / 2 - t / 2, 0)
-  addPanel(w, t, d, 0, -h / 2 + t / 2, 0)
-  // Fond
-  addPanel(w, h, t, 0, 0, -d / 2 + t / 2)
-
-  // Séparations verticales -> colonnes
-  const innerW = w - 2 * t
-  for (let i = 1; i < config.colonnes; i++) {
-    const x = -w / 2 + t + (innerW / config.colonnes) * i
-    addPanel(t, h - 2 * t, d - t, x, 0, t / 2)
-  }
-
-  // Une étagère par colonne
-  const colW = innerW / config.colonnes
-  for (let c = 0; c < config.colonnes; c++) {
-    const cx = -w / 2 + t + colW * (c + 0.5)
-    addPanel(colW - t, t, d - t, cx, 0, t / 2)
-  }
-
-  group.position.y = 0
-  return group
-}
-
-// Dimensions max possibles (bornes des sliders), en mètres.
-// La caméra est cadrée sur ce gabarit une fois pour toutes : elle ne bouge
-// donc jamais quand on change la config, et la hauteur apparente reste
-// constante quelle que soit la largeur choisie.
-const MAX_DIMS = { w: 400 / 100, h: 280 / 100, d: 80 / 100 }
-
 /**
- * Place la caméra pour que le PLUS GRAND meuble possible tienne dans le cadre,
- * en tenant compte du ratio du viewport. Distance indépendante de la config.
+ * Place la caméra pour que le plus grand meuble possible du type courant tienne
+ * dans le cadre. Le cadrage ne dépend que du type : à l'intérieur d'un meuble,
+ * la caméra ne bouge plus, et la taille apparente ne saute pas quand on tire un
+ * curseur.
  */
-function frameCamera(camera: THREE.PerspectiveCamera) {
+function frameCamera(
+  camera: THREE.PerspectiveCamera,
+  dims: { w: number; h: number; d: number },
+) {
   const fov = (camera.fov * Math.PI) / 180
-  // Largeur apparente max une fois le meuble pivoté (diagonale au sol)
-  const horiz = Math.sqrt(MAX_DIMS.w * MAX_DIMS.w + MAX_DIMS.d * MAX_DIMS.d)
-  const fitH = MAX_DIMS.h / 2 / Math.tan(fov / 2)
+  // Largeur apparente maximale une fois le meuble pivoté (diagonale au sol)
+  const horiz = Math.hypot(dims.w, dims.d)
+  const fitH = dims.h / 2 / Math.tan(fov / 2)
   const fitW = horiz / 2 / (Math.tan(fov / 2) * camera.aspect)
-  const dist = Math.max(fitH, fitW) * 1.08 + MAX_DIMS.d / 2
+  const dist = Math.max(fitH, fitW) * 1.08 + dims.d / 2
   camera.position.set(0, 0, dist)
   camera.lookAt(0, 0, 0)
 }
 
 export default function Configurator() {
-  const [config, setConfig] = useState<DressingConfig>(DEFAULT_CONFIG)
+  const [type, setType] = useState<FurnitureKey>('placard')
+  // Une configuration mémorisée par type : revenir sur un meuble déjà réglé
+  // restitue ses mesures.
+  const [store, setStore] = useState<Record<FurnitureKey, FurnitureConfig>>(initialConfigs)
+  // Le matériau, lui, est commun : le choix d'essence vaut pour tout le catalogue.
+  const [materiau, setMateriau] = useState<MaterialKey>('chene')
+
+  const meuble = FURNITURE[type]
+  const config = store[type]
 
   const mountRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<THREE.Scene>()
   const rendererRef = useRef<THREE.WebGLRenderer>()
   const cameraRef = useRef<THREE.PerspectiveCamera>()
-  const dressingRef = useRef<THREE.Group>()
+  const objectRef = useRef<THREE.Group>()
+  const dimsRef = useRef(FURNITURE.placard.maxDims)
   const rotationRef = useRef({ y: -0.5, x: 0.1 })
 
   // Init de la scène (une seule fois)
@@ -113,7 +70,7 @@ export default function Configurator() {
     scene.background = new THREE.Color(0xf5f1ea)
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100)
-    frameCamera(camera)
+    frameCamera(camera, dimsRef.current)
 
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -164,9 +121,9 @@ export default function Configurator() {
     let raf = 0
     const animate = () => {
       raf = requestAnimationFrame(animate)
-      if (dressingRef.current) {
-        dressingRef.current.rotation.y = rotationRef.current.y
-        dressingRef.current.rotation.x = rotationRef.current.x
+      if (objectRef.current) {
+        objectRef.current.rotation.y = rotationRef.current.y
+        objectRef.current.rotation.x = rotationRef.current.x
       }
       renderer.render(scene, camera)
     }
@@ -178,7 +135,7 @@ export default function Configurator() {
       camera.aspect = w / h
       camera.updateProjectionMatrix()
       renderer.setSize(w, h)
-      frameCamera(camera)
+      frameCamera(camera, dimsRef.current)
     }
     window.addEventListener('resize', onResize)
 
@@ -193,15 +150,21 @@ export default function Configurator() {
     }
   }, [])
 
-  // Reconstruit le meuble à chaque changement de config
+  // Recadrage au changement de type uniquement
+  useEffect(() => {
+    dimsRef.current = FURNITURE[type].maxDims
+    const camera = cameraRef.current
+    if (camera) frameCamera(camera, dimsRef.current)
+  }, [type])
+
+  // Reconstruit le meuble à chaque changement de type, de mesure ou d'essence
   useEffect(() => {
     const scene = sceneRef.current
-    const camera = cameraRef.current
-    if (!scene || !camera) return
+    if (!scene) return
 
-    if (dressingRef.current) {
-      scene.remove(dressingRef.current)
-      dressingRef.current.traverse((obj) => {
+    if (objectRef.current) {
+      scene.remove(objectRef.current)
+      objectRef.current.traverse((obj) => {
         if (obj instanceof THREE.Mesh) {
           obj.geometry.dispose()
           ;(obj.material as THREE.Material).dispose()
@@ -209,35 +172,73 @@ export default function Configurator() {
       })
     }
 
-    const dressing = buildDressing(config)
-    dressingRef.current = dressing
-    scene.add(dressing)
-  }, [config])
+    const built = FURNITURE[type].build(config, MATERIALS[materiau].color)
+    objectRef.current = built
+    scene.add(built)
+  }, [type, config, materiau])
 
-  const update = <K extends keyof DressingConfig>(key: K, value: DressingConfig[K]) =>
-    setConfig((prev) => ({ ...prev, [key]: value }))
+  const update = (key: string, value: ParamValue) =>
+    setStore((prev) => ({ ...prev, [type]: { ...prev[type], [key]: value } }))
 
-  const prix = calcPrix(config)
+  const prix = calcPrix(type, config, materiau)
+  const options = OPTIONS.filter((o) => meuble.options.includes(o.key))
 
   return (
     <section id="configurateur" className="bg-cream px-6 md:px-12 py-20 md:py-28">
       <div className="max-w-6xl mx-auto">
-        <p className="text-oak text-[0.7rem] font-medium tracking-[0.15em] uppercase mb-4">
+        <p className="text-brand text-[0.7rem] font-medium tracking-[0.15em] uppercase mb-4">
           Configurateur
         </p>
         <h2
-          className="font-playfair text-charcoal font-normal leading-tight mb-12"
+          className="font-playfair text-charcoal font-normal leading-tight mb-8"
           style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}
         >
-          Composez votre dressing<br />et obtenez un prix instantané
+          Composez votre meuble<br />et obtenez un prix instantané
         </h2>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        {/* Présélection du type de meuble */}
+        <div className="text-charcoal text-xs uppercase tracking-widest mb-3">
+          Quel meuble souhaitez-vous ?
+        </div>
+        <div className="-mx-6 md:mx-0 px-6 md:px-0 overflow-x-auto">
+          <div className="flex gap-3 min-w-max pb-1">
+            {FURNITURE_KEYS.map((key) => {
+              const Schema = SCHEMATICS[key]
+              const active = key === type
+              return (
+                <button
+                  key={key}
+                  onClick={() => setType(key)}
+                  aria-pressed={active}
+                  className={`flex-none w-[120px] flex flex-col items-center gap-2 p-3 rounded-sm border transition-colors ${
+                    active
+                      ? 'border-brand bg-white'
+                      : 'border-brand/20 bg-white/40 hover:border-brand/50'
+                  }`}
+                >
+                  <span
+                    className={`w-full aspect-square ${active ? 'text-brand' : 'text-muted'}`}
+                  >
+                    <Schema />
+                  </span>
+                  <span className="text-charcoal text-[0.7rem] text-center leading-tight">
+                    {FURNITURE[key].label}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <p className="text-muted text-xs mt-2">
+          Neuf familles au catalogue — faites défiler pour toutes les voir.
+        </p>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mt-10">
           {/* Aperçu 3D */}
           <div className="flex flex-col gap-3">
             <div
               ref={mountRef}
-              className="w-full aspect-square lg:aspect-auto lg:h-[460px] bg-cream border border-oak/20 rounded-sm overflow-hidden"
+              className="w-full aspect-square lg:aspect-auto lg:h-[460px] bg-cream border border-brand/20 rounded-sm overflow-hidden"
             />
             <p className="text-muted text-xs text-center">
               Cliquez-glissez pour faire pivoter le meuble
@@ -246,41 +247,22 @@ export default function Configurator() {
 
           {/* Contrôles */}
           <div className="flex flex-col gap-8">
-            {/* Dimensions */}
-            <div className="flex flex-col gap-5">
-              <SliderRow
-                label="Largeur"
-                value={config.largeur}
-                min={120}
-                max={400}
-                step={10}
-                onChange={(v) => update('largeur', v)}
-              />
-              <SliderRow
-                label="Hauteur"
-                value={config.hauteur}
-                min={180}
-                max={280}
-                step={10}
-                onChange={(v) => update('hauteur', v)}
-              />
-              <SliderRow
-                label="Profondeur"
-                value={config.profondeur}
-                min={40}
-                max={80}
-                step={5}
-                onChange={(v) => update('profondeur', v)}
-              />
-              <SliderRow
-                label="Colonnes"
-                value={config.colonnes}
-                min={1}
-                max={6}
-                step={1}
-                unit=""
-                onChange={(v) => update('colonnes', v)}
-              />
+            <div>
+              <div className="flex items-baseline justify-between mb-1">
+                <h3 className="font-playfair text-charcoal text-xl">{meuble.label}</h3>
+              </div>
+              <p className="text-muted text-sm leading-relaxed mb-5">{meuble.tagline}</p>
+
+              <div className="flex flex-col gap-5">
+                {meuble.params.map((param) => (
+                  <ParamRow
+                    key={param.key}
+                    param={param}
+                    value={config[param.key]}
+                    onChange={(v) => update(param.key, v)}
+                  />
+                ))}
+              </div>
             </div>
 
             {/* Matériaux */}
@@ -291,13 +273,13 @@ export default function Configurator() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {MATERIAL_KEYS.map((key) => {
                   const m = MATERIALS[key]
-                  const active = config.materiau === key
+                  const active = materiau === key
                   return (
                     <button
                       key={key}
-                      onClick={() => update('materiau', key)}
+                      onClick={() => setMateriau(key)}
                       className={`flex flex-col items-center gap-2 p-3 rounded-sm border transition-colors ${
-                        active ? 'border-oak bg-white' : 'border-oak/20 hover:border-oak/50'
+                        active ? 'border-brand bg-white' : 'border-brand/20 hover:border-brand/50'
                       }`}
                     >
                       <span
@@ -313,36 +295,38 @@ export default function Configurator() {
               </div>
             </div>
 
-            {/* Options */}
-            <div>
-              <div className="text-charcoal text-xs uppercase tracking-widest mb-3">
-                Options
+            {/* Options — seulement celles qui concernent ce meuble */}
+            {options.length > 0 && (
+              <div>
+                <div className="text-charcoal text-xs uppercase tracking-widest mb-3">
+                  Options
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {options.map((opt) => {
+                    const active = Boolean(config[opt.key])
+                    return (
+                      <label
+                        key={opt.key}
+                        className={`flex items-center justify-between gap-3 p-3 rounded-sm border cursor-pointer transition-colors ${
+                          active ? 'border-brand bg-white' : 'border-brand/20 hover:border-brand/50'
+                        }`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={active}
+                            onChange={(e) => update(opt.key, e.target.checked)}
+                            className="accent-brand"
+                          />
+                          <span className="text-charcoal text-sm">{opt.label}</span>
+                        </span>
+                        <span className="text-muted text-xs">+{opt.price} €</span>
+                      </label>
+                    )
+                  })}
+                </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {OPTIONS.map((opt) => {
-                  const active = config[opt.key] as boolean
-                  return (
-                    <label
-                      key={opt.key}
-                      className={`flex items-center justify-between gap-3 p-3 rounded-sm border cursor-pointer transition-colors ${
-                        active ? 'border-oak bg-white' : 'border-oak/20 hover:border-oak/50'
-                      }`}
-                    >
-                      <span className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          checked={active}
-                          onChange={(e) => update(opt.key, e.target.checked)}
-                          className="accent-oak"
-                        />
-                        <span className="text-charcoal text-sm">{opt.label}</span>
-                      </span>
-                      <span className="text-muted text-xs">+{opt.price} €</span>
-                    </label>
-                  )
-                })}
-              </div>
-            </div>
+            )}
 
             {/* Prix */}
             <div className="bg-charcoal rounded-sm p-6 text-white">
@@ -356,13 +340,13 @@ export default function Configurator() {
                 <span className="text-white/60 text-xs uppercase tracking-widest">
                   Estimation totale
                 </span>
-                <span className="font-playfair text-oak text-3xl">
+                <span className="font-playfair text-brand text-3xl">
                   {formatPrice(prix.total)}
                 </span>
               </div>
               <a
                 href="#contact"
-                className="mt-5 block text-center bg-oak text-white text-sm font-medium px-8 py-3.5 rounded-sm hover:bg-oak-dark transition-colors"
+                className="mt-5 block text-center bg-brand text-white text-sm font-medium px-8 py-3.5 rounded-sm hover:bg-brand-dark transition-colors"
               >
                 Demander ce devis
               </a>
@@ -374,42 +358,113 @@ export default function Configurator() {
   )
 }
 
-function SliderRow({
-  label,
+/** Rend le contrôle correspondant au type de paramètre déclaré par le meuble. */
+function ParamRow({
+  param,
   value,
-  min,
-  max,
-  step,
-  unit = ' cm',
   onChange,
 }: {
-  label: string
+  param: ParamDef
+  value: ParamValue
+  onChange: (v: ParamValue) => void
+}) {
+  if (param.kind === 'number') {
+    return <SliderRow param={param} value={Number(value)} onChange={onChange} />
+  }
+  if (param.kind === 'choice') {
+    return <ChoiceRow param={param} value={String(value)} onChange={onChange} />
+  }
+  return <ToggleRow param={param} value={Boolean(value)} onChange={onChange} />
+}
+
+function SliderRow({
+  param,
+  value,
+  onChange,
+}: {
+  param: NumberParam
   value: number
-  min: number
-  max: number
-  step: number
-  unit?: string
   onChange: (v: number) => void
 }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-charcoal text-xs uppercase tracking-widest">{label}</span>
-        <span className="text-oak text-sm font-medium">
+        <span className="text-charcoal text-xs uppercase tracking-widest">{param.label}</span>
+        <span className="text-brand text-sm font-medium">
           {value}
-          {unit}
+          {param.unit ?? ' cm'}
         </span>
       </div>
       <input
         type="range"
-        className="range-oak w-full"
-        min={min}
-        max={max}
-        step={step}
+        className="range-brand w-full"
+        min={param.min}
+        max={param.max}
+        step={param.step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
       />
     </div>
+  )
+}
+
+function ChoiceRow({
+  param,
+  value,
+  onChange,
+}: {
+  param: ChoiceParam
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div>
+      <div className="text-charcoal text-xs uppercase tracking-widest mb-2">{param.label}</div>
+      <div className="flex gap-2">
+        {param.choices.map((choice) => {
+          const active = choice.value === value
+          return (
+            <button
+              key={choice.value}
+              onClick={() => onChange(choice.value)}
+              className={`flex-1 text-sm px-3 py-2 rounded-sm border transition-colors ${
+                active
+                  ? 'border-brand bg-white text-charcoal'
+                  : 'border-brand/20 text-muted hover:border-brand/50'
+              }`}
+            >
+              {choice.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ToggleRow({
+  param,
+  value,
+  onChange,
+}: {
+  param: ToggleParam
+  value: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <label
+      className={`flex items-center gap-3 p-3 rounded-sm border cursor-pointer transition-colors ${
+        value ? 'border-brand bg-white' : 'border-brand/20 hover:border-brand/50'
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={value}
+        onChange={(e) => onChange(e.target.checked)}
+        className="accent-brand"
+      />
+      <span className="text-charcoal text-sm">{param.label}</span>
+    </label>
   )
 }
 
